@@ -214,7 +214,7 @@ class IRPresentationsCollector:
         self.crawler = WebCrawler(
             user_agent=ticker_config.sec_user_agent,
             rate_limit=2.0,  # 2 seconds between requests
-            respect_robots=True
+            respect_robots=False
         )
 
     def collect(

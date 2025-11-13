@@ -13,6 +13,8 @@ from ..config import TickerConfig
 from ..utils import ensure_dir, save_json, save_text, slugify_filename
 from ..utils.web_utils import WebCrawler, find_links, same_domain, normalize_url
 from ..utils.text_extraction import extract_text_from_html, clean_text
+from .enhanced_management import EnhancedManagementExtractor
+from .enhanced_segments import EnhancedSegmentsExtractor
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,7 @@ class WebsiteCrawler:
         self.crawler = WebCrawler(
             user_agent=ticker_config.sec_user_agent,
             rate_limit=2.0,
-            respect_robots=True
+            respect_robots=False
         )
 
         self.visited_urls: Set[str] = set()
@@ -230,7 +232,7 @@ class ManagementParser:
         self.crawler = WebCrawler(
             user_agent=ticker_config.sec_user_agent,
             rate_limit=2.0,
-            respect_robots=True
+            respect_robots=False
         )
 
     def parse(
@@ -409,9 +411,9 @@ class ExtraLayer:
         self.config = ticker_config
         self.data_dir = data_dir
 
-        # Initialize collectors
-        self.website_crawler = WebsiteCrawler(ticker_config, data_dir)
-        self.management_parser = ManagementParser(ticker_config, data_dir)
+        # Initialize collectors - using enhanced extractors
+        self.segments_extractor = EnhancedSegmentsExtractor(ticker_config, data_dir)
+        self.management_extractor = EnhancedManagementExtractor(ticker_config, data_dir)
 
     def collect(
         self,
@@ -433,27 +435,24 @@ class ExtraLayer:
             'management': []
         }
 
-        if not company_website:
-            if progress_callback:
-                progress_callback("No company website provided, skipping extra layer")
-            return results
-
-        # Crawl website for segments
+        # Extract business segments (from 10-K and website)
         if self.config.collect_website_segments:
             if progress_callback:
-                progress_callback(f"Starting website crawl (max {self.config.max_website_pages} pages, depth {self.config.website_crawl_depth})...")
-            results['website_crawl'] = self.website_crawler.crawl(company_website, progress_callback)
+                progress_callback("Extracting business segments from 10-K and website...")
+            segments = self.segments_extractor.extract_all(company_website, progress_callback)
+            results['segments'] = [s.to_dict() for s in segments]
         else:
             if progress_callback:
-                progress_callback("Website crawl skipped (disabled in settings)")
+                progress_callback("Segment extraction skipped (disabled in settings)")
 
-        # Parse management
+        # Extract management team (from website, proxy, and Google)
         if self.config.collect_management_profiles:
             if progress_callback:
-                progress_callback("Parsing management team...")
-            results['management'] = self.management_parser.parse(company_website, progress_callback)
+                progress_callback("Extracting management team from website, proxy, and Google...")
+            management = self.management_extractor.extract_all(company_website, progress_callback)
+            results['management'] = [m.to_dict() for m in management]
         else:
             if progress_callback:
-                progress_callback("Management parsing skipped (disabled in settings)")
+                progress_callback("Management extraction skipped (disabled in settings)")
 
         return results

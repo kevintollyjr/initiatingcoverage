@@ -39,13 +39,13 @@ class RobotsChecker:
 
 
 class WebCrawler:
-    """Simple web crawler with rate limiting and robots.txt compliance"""
+    """Simple web crawler with rate limiting"""
 
     def __init__(
         self,
         user_agent: str = "ResearchBot/1.0",
         rate_limit: float = 1.0,  # seconds between requests
-        respect_robots: bool = True
+        respect_robots: bool = False  # Disabled for comprehensive data collection
     ):
         self.user_agent = user_agent
         self.rate_limit = rate_limit

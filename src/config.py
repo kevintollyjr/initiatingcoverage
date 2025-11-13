@@ -68,6 +68,9 @@ class TickerConfig:
     max_website_pages: int = 100
     website_crawl_depth: int = 2
 
+    # SEC Filing format preference
+    sec_filing_format: str = "html"  # "html", "pdf", or "both"
+
     # API keys (from Streamlit secrets or environment)
     alpha_vantage_key: Optional[str] = None
     fmp_key: Optional[str] = None  # FinancialModelingPrep

@@ -227,12 +227,22 @@ def main():
                     collect_def14a = st.checkbox("DEF 14A", value=True, key="def14a")
                     collect_8k = st.checkbox("8-K", value=True, key="8k")
 
+                st.caption("Filing Format")
+                sec_filing_format = st.radio(
+                    "Preferred Format",
+                    options=["html", "pdf", "both"],
+                    index=0,
+                    horizontal=True,
+                    help="HTML is faster, PDF is more readable, Both downloads everything"
+                )
+
                 st.caption("Investor Relations")
                 collect_ir_presentations = st.checkbox("IR Presentations", value=True, key="ir_pres")
                 collect_transcripts = st.checkbox("Earnings Transcripts", value=True, key="transcripts")
         else:
             collect_10k = collect_10q = collect_def14a = collect_8k = False
             collect_ir_presentations = collect_transcripts = False
+            sec_filing_format = "html"
 
         enable_market = st.checkbox(
             "Market Context",
@@ -365,6 +375,7 @@ def main():
             collect_8k=collect_8k,
             collect_ir_presentations=collect_ir_presentations,
             collect_transcripts=collect_transcripts,
+            sec_filing_format=sec_filing_format,
             # Market layer granular settings
             collect_price_history=collect_price_history,
             collect_fundamentals=collect_fundamentals,

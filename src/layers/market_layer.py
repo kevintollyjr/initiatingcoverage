@@ -269,7 +269,7 @@ class NewsCollector:
         self.crawler = WebCrawler(
             user_agent=ticker_config.sec_user_agent,
             rate_limit=2.0,
-            respect_robots=True
+            respect_robots=False
         )
 
     def collect(
