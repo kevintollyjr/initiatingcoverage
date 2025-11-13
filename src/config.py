@@ -46,6 +46,28 @@ class TickerConfig:
     enable_market_layer: bool = True
     enable_extra_layer: bool = True
 
+    # Base Layer - Granular controls
+    collect_10k: bool = True
+    collect_10q: bool = True
+    collect_def14a: bool = True
+    collect_8k: bool = True
+    collect_ir_presentations: bool = True
+    collect_transcripts: bool = True
+
+    # Market Layer - Granular controls
+    collect_price_history: bool = True
+    collect_fundamentals: bool = True
+    collect_earnings_estimates: bool = True
+    collect_analyst_ratings: bool = True
+    collect_press_releases: bool = True
+    collect_external_news: bool = True
+
+    # Extra Layer - Granular controls
+    collect_website_segments: bool = True
+    collect_management_profiles: bool = True
+    max_website_pages: int = 100
+    website_crawl_depth: int = 2
+
     # API keys (from Streamlit secrets or environment)
     alpha_vantage_key: Optional[str] = None
     fmp_key: Optional[str] = None  # FinancialModelingPrep

@@ -34,7 +34,8 @@ class WebsiteCrawler:
         )
 
         self.visited_urls: Set[str] = set()
-        self.max_pages = 100  # Limit total pages crawled
+        self.max_pages = ticker_config.max_website_pages
+        self.max_depth = ticker_config.website_crawl_depth
 
     def crawl(
         self,
@@ -437,14 +438,22 @@ class ExtraLayer:
                 progress_callback("No company website provided, skipping extra layer")
             return results
 
-        # Crawl website
-        if progress_callback:
-            progress_callback("Starting website crawl...")
-        results['website_crawl'] = self.website_crawler.crawl(company_website, progress_callback)
+        # Crawl website for segments
+        if self.config.collect_website_segments:
+            if progress_callback:
+                progress_callback(f"Starting website crawl (max {self.config.max_website_pages} pages, depth {self.config.website_crawl_depth})...")
+            results['website_crawl'] = self.website_crawler.crawl(company_website, progress_callback)
+        else:
+            if progress_callback:
+                progress_callback("Website crawl skipped (disabled in settings)")
 
         # Parse management
-        if progress_callback:
-            progress_callback("Parsing management team...")
-        results['management'] = self.management_parser.parse(company_website, progress_callback)
+        if self.config.collect_management_profiles:
+            if progress_callback:
+                progress_callback("Parsing management team...")
+            results['management'] = self.management_parser.parse(company_website, progress_callback)
+        else:
+            if progress_callback:
+                progress_callback("Management parsing skipped (disabled in settings)")
 
         return results

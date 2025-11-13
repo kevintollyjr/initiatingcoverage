@@ -446,18 +446,30 @@ class MarketLayer:
         }
 
         # Collect market data
-        if progress_callback:
-            progress_callback("Starting market data collection...")
-        results['market_data'] = self.market_collector.collect(progress_callback)
+        if self.config.collect_price_history or self.config.collect_fundamentals:
+            if progress_callback:
+                progress_callback("Starting market data collection...")
+            results['market_data'] = self.market_collector.collect(progress_callback)
+        else:
+            if progress_callback:
+                progress_callback("Market data collection skipped (disabled in settings)")
 
         # Collect estimates
-        if progress_callback:
-            progress_callback("Starting estimates collection...")
-        results['estimates'] = self.estimates_collector.collect(progress_callback)
+        if self.config.collect_earnings_estimates:
+            if progress_callback:
+                progress_callback("Starting estimates collection...")
+            results['estimates'] = self.estimates_collector.collect(progress_callback)
+        else:
+            if progress_callback:
+                progress_callback("Estimates collection skipped (disabled in settings)")
 
         # Collect news
-        if progress_callback:
-            progress_callback("Starting news collection...")
-        results['news'] = self.news_collector.collect(company_website, progress_callback)
+        if self.config.collect_press_releases or self.config.collect_external_news:
+            if progress_callback:
+                progress_callback("Starting news collection...")
+            results['news'] = self.news_collector.collect(company_website, progress_callback)
+        else:
+            if progress_callback:
+                progress_callback("News collection skipped (disabled in settings)")
 
         return results

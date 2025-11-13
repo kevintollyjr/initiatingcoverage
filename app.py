@@ -199,9 +199,9 @@ def main():
         lookback_years = st.slider(
             "Years of History",
             min_value=1,
-            max_value=10,
+            max_value=20,
             value=10,
-            help="Number of years to look back for data"
+            help="Number of years to look back for data (1-20 years)"
         )
 
         st.divider()
@@ -215,17 +215,83 @@ def main():
             help="SEC filings, IR presentations, transcripts"
         )
 
+        # Base Layer granular controls
+        if enable_base:
+            with st.expander("⚙️ Base Layer Settings"):
+                st.caption("SEC Filings")
+                col1, col2 = st.columns(2)
+                with col1:
+                    collect_10k = st.checkbox("10-K", value=True, key="10k")
+                    collect_10q = st.checkbox("10-Q", value=True, key="10q")
+                with col2:
+                    collect_def14a = st.checkbox("DEF 14A", value=True, key="def14a")
+                    collect_8k = st.checkbox("8-K", value=True, key="8k")
+
+                st.caption("Investor Relations")
+                collect_ir_presentations = st.checkbox("IR Presentations", value=True, key="ir_pres")
+                collect_transcripts = st.checkbox("Earnings Transcripts", value=True, key="transcripts")
+        else:
+            collect_10k = collect_10q = collect_def14a = collect_8k = False
+            collect_ir_presentations = collect_transcripts = False
+
         enable_market = st.checkbox(
             "Market Context",
             value=True,
             help="Market data, estimates, news"
         )
 
+        # Market Layer granular controls
+        if enable_market:
+            with st.expander("⚙️ Market Layer Settings"):
+                st.caption("Market Data")
+                collect_price_history = st.checkbox("Price History", value=True, key="price")
+                collect_fundamentals = st.checkbox("Fundamentals", value=True, key="fundamentals")
+
+                st.caption("Estimates & Ratings")
+                collect_earnings_estimates = st.checkbox("Earnings Estimates", value=True, key="estimates")
+                collect_analyst_ratings = st.checkbox("Analyst Ratings", value=True, key="ratings")
+
+                st.caption("News")
+                collect_press_releases = st.checkbox("Press Releases", value=True, key="pr")
+                collect_external_news = st.checkbox("External News", value=True, key="news")
+        else:
+            collect_price_history = collect_fundamentals = False
+            collect_earnings_estimates = collect_analyst_ratings = False
+            collect_press_releases = collect_external_news = False
+
         enable_extra = st.checkbox(
             "Extra Data",
             value=False,
             help="Website crawl, segments, management"
         )
+
+        # Extra Layer granular controls
+        if enable_extra:
+            with st.expander("⚙️ Extra Layer Settings"):
+                st.caption("Website Analysis")
+                collect_website_segments = st.checkbox("Business Segments", value=True, key="segments")
+                collect_management_profiles = st.checkbox("Management Profiles", value=True, key="mgmt")
+
+                st.caption("Crawl Parameters")
+                max_website_pages = st.number_input(
+                    "Max Pages to Crawl",
+                    min_value=10,
+                    max_value=500,
+                    value=100,
+                    step=10,
+                    help="Maximum number of website pages to crawl"
+                )
+                website_crawl_depth = st.slider(
+                    "Crawl Depth",
+                    min_value=1,
+                    max_value=5,
+                    value=2,
+                    help="How many levels deep to crawl from main page"
+                )
+        else:
+            collect_website_segments = collect_management_profiles = False
+            max_website_pages = 100
+            website_crawl_depth = 2
 
         st.divider()
 
@@ -292,6 +358,26 @@ def main():
             enable_base_layer=enable_base,
             enable_market_layer=enable_market,
             enable_extra_layer=enable_extra,
+            # Base layer granular settings
+            collect_10k=collect_10k,
+            collect_10q=collect_10q,
+            collect_def14a=collect_def14a,
+            collect_8k=collect_8k,
+            collect_ir_presentations=collect_ir_presentations,
+            collect_transcripts=collect_transcripts,
+            # Market layer granular settings
+            collect_price_history=collect_price_history,
+            collect_fundamentals=collect_fundamentals,
+            collect_earnings_estimates=collect_earnings_estimates,
+            collect_analyst_ratings=collect_analyst_ratings,
+            collect_press_releases=collect_press_releases,
+            collect_external_news=collect_external_news,
+            # Extra layer granular settings
+            collect_website_segments=collect_website_segments,
+            collect_management_profiles=collect_management_profiles,
+            max_website_pages=max_website_pages,
+            website_crawl_depth=website_crawl_depth,
+            # API keys
             alpha_vantage_key=alpha_vantage_key if alpha_vantage_key else None,
             fmp_key=fmp_key if fmp_key else None,
             sec_user_agent=sec_user_agent

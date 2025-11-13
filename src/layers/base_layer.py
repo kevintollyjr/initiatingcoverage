@@ -58,8 +58,21 @@ class SECFilingsCollector:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=365 * self.config.lookback_years)
 
-        # Form types to download
-        form_types = ['10-K', '10-Q', 'DEF 14A', 'DEFA14A', '8-K']
+        # Form types to download based on config
+        form_types = []
+        if self.config.collect_10k:
+            form_types.append('10-K')
+        if self.config.collect_10q:
+            form_types.append('10-Q')
+        if self.config.collect_def14a:
+            form_types.extend(['DEF 14A', 'DEFA14A'])
+        if self.config.collect_8k:
+            form_types.append('8-K')
+
+        if not form_types:
+            if progress_callback:
+                progress_callback("No SEC filing types selected")
+            return []
 
         for form_type in form_types:
             if progress_callback:
@@ -519,20 +532,33 @@ class BaseLayer:
             'transcripts': []
         }
 
-        # Collect SEC filings
-        if progress_callback:
-            progress_callback("Starting SEC filings collection...")
-        results['filings'] = self.sec_collector.collect(progress_callback)
+        # Collect SEC filings (if any filing types are selected)
+        if any([self.config.collect_10k, self.config.collect_10q,
+                self.config.collect_def14a, self.config.collect_8k]):
+            if progress_callback:
+                progress_callback("Starting SEC filings collection...")
+            results['filings'] = self.sec_collector.collect(progress_callback)
+        else:
+            if progress_callback:
+                progress_callback("SEC filings collection skipped (no filing types selected)")
 
         # Collect IR presentations
-        if company_website:
+        if self.config.collect_ir_presentations and company_website:
             if progress_callback:
                 progress_callback("Starting IR presentations collection...")
             results['presentations'] = self.ir_collector.collect(company_website, progress_callback)
+        else:
+            if progress_callback:
+                reason = "no website provided" if not company_website else "disabled in settings"
+                progress_callback(f"IR presentations collection skipped ({reason})")
 
         # Collect transcripts
-        if progress_callback:
-            progress_callback("Starting transcripts collection...")
-        results['transcripts'] = self.transcripts_collector.collect(progress_callback)
+        if self.config.collect_transcripts:
+            if progress_callback:
+                progress_callback("Starting transcripts collection...")
+            results['transcripts'] = self.transcripts_collector.collect(progress_callback)
+        else:
+            if progress_callback:
+                progress_callback("Transcripts collection skipped (disabled in settings)")
 
         return results
