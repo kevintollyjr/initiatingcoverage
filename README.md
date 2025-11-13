@@ -9,12 +9,14 @@ This application helps analysts quickly gather and organize relevant company inf
 ### Key Features
 
 - **Modular Data Layers**: Three independent layers (Base, Market Context, Extra Data) that can be toggled on/off
-- **SEC Filings**: Automated download of 10-K, 10-Q, DEF 14A, and 8-K filings
+- **Granular Controls**: 20+ individual settings for fine-tuned data collection (see [SETTINGS_GUIDE.md](SETTINGS_GUIDE.md))
+- **Extended History**: Up to 20 years of historical data (previously 10 years)
+- **SEC Filings**: Automated download of 10-K, 10-Q, DEF 14A, and 8-K filings (individually selectable)
 - **IR Materials**: Investor relations presentations and transcripts
 - **Market Data**: Price history, fundamentals, and derived metrics
 - **Analyst Estimates**: Earnings estimates, surprises, and consensus data
 - **News Aggregation**: Press releases and external news articles
-- **Website Intelligence**: Business segments, products, and management profiles
+- **Website Intelligence**: Business segments, products, and management profiles (configurable crawl depth and page limits)
 - **ZIP Download**: One-click export of all collected data
 - **Compliance First**: Respects robots.txt, rate limits, and site terms of service
 
@@ -99,15 +101,26 @@ In the sidebar, enter:
 - **Ticker Symbol** (required): e.g., `AAPL`, `MSFT`, `KLAC`
 - **CIK** (optional): SEC Central Index Key
 - **Company Website**: For IR materials and website crawling
-- **Years of History**: 1-10 years (default: 10)
+- **Years of History**: 1-20 years (default: 10)
 
-#### 2. Select Data Layers
+#### 2. Select Data Layers & Granular Settings
 
 Toggle which data layers to collect:
 
 - ✅ **Base Layer**: SEC filings, IR presentations, transcripts
+  - Click **"⚙️ Base Layer Settings"** to select specific filing types (10-K, 10-Q, DEF 14A, 8-K)
+  - Toggle IR presentations and transcripts individually
+
 - ✅ **Market Context**: Market data, estimates, news
-- ⬜ **Extra Data**: Website crawl, segments, management (can be slow)
+  - Click **"⚙️ Market Layer Settings"** to select specific data types
+  - Individually control price history, fundamentals, estimates, ratings, news
+
+- ⬜ **Extra Data**: Website crawl, segments, management
+  - Click **"⚙️ Extra Layer Settings"** to configure crawl parameters
+  - Set max pages (10-500) and crawl depth (1-5)
+  - Toggle segments and management profiles separately
+
+**💡 See [SETTINGS_GUIDE.md](SETTINGS_GUIDE.md) for detailed configuration options and preset recommendations.**
 
 #### 3. Provide API Keys (Optional)
 
