@@ -2,7 +2,7 @@
 
 from .file_utils import ensure_dir, slugify_filename, save_text, load_json, save_json
 from .rate_limiter import RateLimiter
-from .text_extraction import extract_text_from_html, extract_text_from_pdf
+from .text_extraction import extract_text_from_html, extract_text_from_pdf, extract_text_from_file
 
 __all__ = [
     'ensure_dir',
@@ -13,4 +13,5 @@ __all__ = [
     'RateLimiter',
     'extract_text_from_html',
     'extract_text_from_pdf',
+    'extract_text_from_file',
 ]
