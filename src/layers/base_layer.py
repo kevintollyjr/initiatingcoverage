@@ -192,18 +192,19 @@ class SECFilingsCollector:
                     shutil.copy2(primary_doc, organized_path)
                 filing.local_path = str(organized_path)
 
-                # Extract text for indexing/search (only if not already a PDF)
-                if primary_doc.suffix.lower() != '.pdf':
-                    text_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}.txt"
-                    if not text_path.exists():
+                # Extract text for indexing/search - store in separate subdirectory to keep downloads clean
+                text_extracts_dir = ensure_dir(form_dir / "_text_extracts")
+                text_path = text_extracts_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}.txt"
+
+                if not text_path.exists():
+                    if primary_doc.suffix.lower() != '.pdf':
+                        # Extract from HTML/TXT
                         text_content = extract_text_from_file(primary_doc)
                         if text_content:
                             save_text(text_content, text_path)
                             filing.has_text_extract = True
-                else:
-                    # For PDFs, extract text using pdfplumber/PyMuPDF
-                    text_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}.txt"
-                    if not text_path.exists():
+                    else:
+                        # Extract from PDF using pdfplumber
                         try:
                             import pdfplumber
                             with pdfplumber.open(primary_doc) as pdf:
