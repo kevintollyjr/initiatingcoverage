@@ -37,18 +37,17 @@ For detailed AI feature documentation, see [LLM_FEATURES.md](LLM_FEATURES.md)
 
 **What works on Streamlit Cloud:**
 - ✅ All data collection features (SEC filings, IR materials, market data, news, website crawling)
+- ✅ **PDF downloads directly from SEC EDGAR** (when available - most filings!)
 - ✅ Enhanced management and segments extraction
 - ✅ Comprehensive website crawler
 - ✅ IR presentations timeframe filtering
 - ✅ All visualization and data export features
-- ⚠️ SEC filings saved as HTML/TXT (PDF conversion requires system libraries)
 
 **Local deployment only:**
-- 🤖 AI report generation (requires Ollama)
+- 🤖 AI report generation (requires Ollama + 8GB RAM)
 - 💬 Interactive chat Q&A (requires Ollama)
-- 📄 PDF conversion of SEC filings (requires WeasyPrint system libraries)
 
-**Recommendation:** Use Streamlit Cloud for data collection, download the ZIP bundle, then run locally for AI features if needed.
+**Recommendation:** Use Streamlit Cloud for data collection (including PDFs!), download the ZIP bundle, then run locally for AI features if needed.
 
 ## 📋 Prerequisites
 
@@ -83,25 +82,7 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 4. Optional: PDF Conversion (Local Only)
-
-By default, SEC filings are saved as HTML/TXT files. For PDF conversion:
-
-**Linux/Ubuntu:**
-```bash
-sudo apt-get install libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0
-pip install -r requirements-local.txt
-```
-
-**macOS:**
-```bash
-brew install pango gdk-pixbuf libffi
-pip install -r requirements-local.txt
-```
-
-**Windows:** See [WeasyPrint installation guide](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#windows)
-
-**Note:** PDF conversion is not available on Streamlit Cloud due to missing system libraries. The app works perfectly fine without it - filings are simply saved in their original HTML/TXT format which is actually better for text extraction and analysis.
+**Note:** PDFs are downloaded directly from SEC EDGAR when companies file them in PDF format (most do!). No conversion or additional dependencies needed.
 
 ## ⚙️ Configuration
 

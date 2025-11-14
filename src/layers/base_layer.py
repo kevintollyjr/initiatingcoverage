@@ -20,24 +20,6 @@ from ..utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-# PDF conversion support (optional - requires system libraries)
-try:
-    from weasyprint import HTML as WeasyHTML
-    from weasyprint.text.fonts import FontConfiguration
-    WEASYPRINT_AVAILABLE = True
-except (ImportError, OSError) as e:
-    WEASYPRINT_AVAILABLE = False
-    # OSError occurs when system libraries (libpango, libcairo) are missing
-    # This is expected on Streamlit Cloud and other restricted environments
-    if isinstance(e, OSError):
-        logger.info(
-            "WeasyPrint system libraries not available - PDF conversion disabled. "
-            "SEC filings will be saved in their original HTML/TXT format. "
-            "For local PDF conversion, see: https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation"
-        )
-    else:
-        logger.info("weasyprint package not installed - PDF conversion disabled")
-
 
 class SECFilingsCollector:
     """Collect SEC filings using sec-edgar-downloader"""
@@ -148,18 +130,43 @@ class SECFilingsCollector:
                 # Parse accession number from directory name
                 accession = filing_dir.name
 
-                # Find the primary document (usually full-submission.txt or filing-details.html)
+                # Find the primary document
+                # Priority: 1) PDF (if user wants PDF or both), 2) HTML, 3) TXT
                 primary_doc = None
-                for doc_file in filing_dir.glob("*.txt"):
-                    if "full-submission" in doc_file.name:
-                        primary_doc = doc_file
-                        break
+                format_pref = self.config.sec_filing_format
 
-                if not primary_doc:
-                    # Try HTML
+                # Check for PDFs first if user wants them
+                if format_pref in ["pdf", "both"]:
+                    pdf_files = list(filing_dir.glob("*.pdf"))
+                    if pdf_files:
+                        # Prefer primary document PDF (not exhibits)
+                        for pdf in pdf_files:
+                            # Skip exhibits (usually have numbers in name like "ex21-1.pdf")
+                            if not any(char.isdigit() for char in pdf.stem[:6]):
+                                primary_doc = pdf
+                                break
+                        # If no primary found, use first PDF
+                        if not primary_doc and pdf_files:
+                            primary_doc = pdf_files[0]
+
+                # Fall back to HTML if no PDF or user prefers HTML
+                if not primary_doc and format_pref in ["html", "both", "pdf"]:
                     for doc_file in filing_dir.glob("*.html"):
-                        primary_doc = doc_file
-                        break
+                        if "primary" in doc_file.name.lower() or len(list(filing_dir.glob("*.html"))) == 1:
+                            primary_doc = doc_file
+                            break
+                    # Use any HTML if none marked as primary
+                    if not primary_doc:
+                        html_files = list(filing_dir.glob("*.html"))
+                        if html_files:
+                            primary_doc = html_files[0]
+
+                # Final fallback to TXT
+                if not primary_doc:
+                    for doc_file in filing_dir.glob("*.txt"):
+                        if "full-submission" in doc_file.name:
+                            primary_doc = doc_file
+                            break
 
                 if not primary_doc:
                     logger.warning(f"No primary document found in {filing_dir}")
@@ -178,46 +185,53 @@ class SECFilingsCollector:
                     has_text_extract=False
                 )
 
-                # Extract text
-                text_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}.txt"
-                if not text_path.exists():
-                    text_content = extract_text_from_file(primary_doc)
-                    if text_content:
-                        save_text(text_content, text_path)
-                        filing.has_text_extract = True
+                # Copy primary document to organized directory
+                import shutil
+                organized_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}{primary_doc.suffix}"
+                if not organized_path.exists():
+                    shutil.copy2(primary_doc, organized_path)
+                filing.local_path = str(organized_path)
 
-                # Handle file format based on user preference
-                format_pref = self.config.sec_filing_format
-                final_paths = []
+                # Extract text for indexing/search (only if not already a PDF)
+                if primary_doc.suffix.lower() != '.pdf':
+                    text_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}.txt"
+                    if not text_path.exists():
+                        text_content = extract_text_from_file(primary_doc)
+                        if text_content:
+                            save_text(text_content, text_path)
+                            filing.has_text_extract = True
+                else:
+                    # For PDFs, extract text using pdfplumber/PyMuPDF
+                    text_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}.txt"
+                    if not text_path.exists():
+                        try:
+                            import pdfplumber
+                            with pdfplumber.open(primary_doc) as pdf:
+                                text_content = ""
+                                for page in pdf.pages:
+                                    text_content += page.extract_text() or ""
+                            if text_content:
+                                save_text(text_content, text_path)
+                                filing.has_text_extract = True
+                        except Exception as e:
+                            logger.warning(f"Could not extract text from PDF {primary_doc}: {e}")
 
-                # Copy/convert based on format preference
-                if format_pref in ["html", "both"]:
-                    # Keep original HTML/TXT
-                    organized_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}{primary_doc.suffix}"
-                    if not organized_path.exists():
-                        import shutil
-                        shutil.copy2(primary_doc, organized_path)
-                    final_paths.append(organized_path)
-
-                if format_pref in ["pdf", "both"]:
-                    # Convert to PDF
-                    pdf_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}.pdf"
-                    if not pdf_path.exists():
-                        if self._convert_to_pdf(primary_doc, pdf_path):
-                            final_paths.append(pdf_path)
-                        else:
-                            # Fallback to original if PDF conversion fails
-                            logger.warning(f"PDF conversion failed for {primary_doc}, keeping original")
-                            organized_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}{primary_doc.suffix}"
-                            if not organized_path.exists():
-                                import shutil
-                                shutil.copy2(primary_doc, organized_path)
-                            final_paths.append(organized_path)
+                # If user wants "both" formats, also copy alternate formats
+                if self.config.sec_filing_format == "both":
+                    # If we got PDF, also save HTML/TXT if available
+                    if primary_doc.suffix.lower() == '.pdf':
+                        for html_file in filing_dir.glob("*.html"):
+                            html_copy = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}.html"
+                            if not html_copy.exists():
+                                shutil.copy2(html_file, html_copy)
+                            break
+                    # If we got HTML/TXT, check if there are any PDFs to also save
                     else:
-                        final_paths.append(pdf_path)
-
-                # Use the primary path (PDF if available, otherwise original)
-                filing.local_path = str(final_paths[0]) if final_paths else str(primary_doc)
+                        for pdf_file in filing_dir.glob("*.pdf"):
+                            pdf_copy = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}_document.pdf"
+                            if not pdf_copy.exists():
+                                shutil.copy2(pdf_file, pdf_copy)
+                            break
 
                 filings.append(filing)
 
@@ -237,65 +251,6 @@ class SECFilingsCollector:
 
         # Fallback: use file modification time
         return datetime.fromtimestamp(primary_doc.stat().st_mtime)
-
-    def _convert_to_pdf(self, source_file: Path, output_pdf: Path) -> bool:
-        """
-        Convert HTML or TXT file to PDF
-
-        Args:
-            source_file: Path to HTML or TXT file
-            output_pdf: Path where PDF should be saved
-
-        Returns:
-            True if conversion succeeded, False otherwise
-        """
-        if not WEASYPRINT_AVAILABLE:
-            logger.warning("weasyprint not installed - cannot convert to PDF")
-            return False
-
-        try:
-            # Read source content
-            with open(source_file, 'r', encoding='utf-8', errors='ignore') as f:
-                content = f.read()
-
-            # Determine if HTML or plain text
-            is_html = source_file.suffix.lower() in ['.html', '.htm']
-
-            if not is_html:
-                # Wrap plain text in basic HTML for better PDF rendering
-                content = f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <style>
-                        body {{
-                            font-family: 'Courier New', monospace;
-                            font-size: 10pt;
-                            margin: 1in;
-                            line-height: 1.4;
-                            white-space: pre-wrap;
-                            word-wrap: break-word;
-                        }}
-                    </style>
-                </head>
-                <body>
-                {content}
-                </body>
-                </html>
-                """
-
-            # Convert to PDF
-            font_config = FontConfiguration()
-            html = WeasyHTML(string=content, base_url=str(source_file.parent))
-            html.write_pdf(output_pdf, font_config=font_config)
-
-            logger.info(f"Successfully converted {source_file.name} to PDF")
-            return True
-
-        except Exception as e:
-            logger.error(f"Error converting {source_file} to PDF: {e}")
-            return False
 
     def _save_filings_index(self, filings: List[SECFiling]):
         """Save filings index to JSON"""

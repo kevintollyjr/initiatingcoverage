@@ -175,9 +175,8 @@ def main():
     if os.getenv('STREAMLIT_SHARING_MODE') or os.getenv('STREAMLIT_CLOUD'):
         st.info("""
         **☁️ Running on Streamlit Cloud**
-        - ✅ All data collection features available
-        - ❌ AI features (report generation, chat) require local deployment
-        - ℹ️ PDF conversion unavailable (SEC filings saved as HTML/TXT)
+        - ✅ All data collection features available (including PDF downloads from SEC!)
+        - ❌ AI features (report generation, chat) require local deployment with Ollama
 
         To use AI features, [run locally](https://github.com/yourusername/initiatingcoverage#installation) and install Ollama.
         """)
@@ -245,16 +244,11 @@ def main():
                     options=["html", "pdf", "both"],
                     index=0,
                     horizontal=True,
-                    help="HTML is faster, PDF is more readable, Both downloads everything"
+                    help="PDF: Download PDFs directly from SEC when available. HTML: Original SEC format. Both: All formats."
                 )
 
-                # Check if PDF conversion is available
-                try:
-                    from src.layers.base_layer import WEASYPRINT_AVAILABLE
-                    if not WEASYPRINT_AVAILABLE and sec_filing_format in ["pdf", "both"]:
-                        st.info("ℹ️ PDF conversion not available (expected on Streamlit Cloud). SEC filings will be saved as HTML/TXT, which works great for analysis!")
-                except ImportError:
-                    pass
+                if sec_filing_format in ["pdf", "both"]:
+                    st.caption("💡 PDFs are downloaded directly from SEC EDGAR (no conversion needed, works on cloud!)")
 
                 st.caption("Investor Relations")
                 collect_ir_presentations = st.checkbox("IR Presentations", value=True, key="ir_pres")
