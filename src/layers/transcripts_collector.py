@@ -43,33 +43,31 @@ class TranscriptsCollector:
             List of Transcript objects
         """
         transcripts = []
+        cutoff_date = datetime.now() - timedelta(days=365 * self.config.lookback_years)
 
         if progress_callback:
             progress_callback(f"Collecting earnings call transcripts for {self.config.ticker}...")
+            progress_callback(f"Looking back {self.config.lookback_years} years (since {cutoff_date.strftime('%Y-%m-%d')})")
 
-        # Try Finnhub API first if API key available
-        if self.finnhub_key:
+        # Try Investing.com first (best free source)
+        if progress_callback:
+            progress_callback("Trying Investing.com...")
+        investing_transcripts = self._collect_from_investing(cutoff_date, progress_callback)
+        transcripts.extend(investing_transcripts)
+
+        # Try Finnhub API if available and we don't have enough
+        if len(transcripts) < 5 and self.finnhub_key:
             if progress_callback:
                 progress_callback("Trying Finnhub API...")
-            finnhub_transcripts = self._collect_from_finnhub(progress_callback)
+            finnhub_transcripts = self._collect_from_finnhub(cutoff_date, progress_callback)
             transcripts.extend(finnhub_transcripts)
-        else:
-            if progress_callback:
-                progress_callback("ℹ️ Finnhub API key not provided - skipping API source")
 
-        # Try Fool.com scraping as fallback
-        if len(transcripts) == 0:
+        # Try Fool.com as additional source
+        if len(transcripts) < 10:
             if progress_callback:
-                progress_callback("Trying Fool.com scraping...")
-            fool_transcripts = self._collect_from_fool(progress_callback)
+                progress_callback("Trying Fool.com...")
+            fool_transcripts = self._collect_from_fool(cutoff_date, progress_callback)
             transcripts.extend(fool_transcripts)
-
-        # Try Seeking Alpha as additional source
-        if len(transcripts) < 5:  # If we don't have many, try another source
-            if progress_callback:
-                progress_callback("Trying Seeking Alpha...")
-            sa_transcripts = self._collect_from_seeking_alpha(progress_callback)
-            transcripts.extend(sa_transcripts)
 
         # Save transcripts index
         if transcripts:
@@ -83,8 +81,149 @@ class TranscriptsCollector:
 
         return transcripts
 
+    def _collect_from_investing(
+        self,
+        cutoff_date: datetime,
+        progress_callback: Optional[Callable[[str], None]] = None
+    ) -> List[Transcript]:
+        """Collect from Investing.com"""
+        transcripts = []
+
+        try:
+            # Search for company earnings transcripts on Investing.com
+            company_name = self.config.ticker  # Could enhance with company name lookup
+            search_url = f"https://www.investing.com/search/?q={self.config.ticker}+earnings+transcript"
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            }
+
+            response = requests.get(search_url, headers=headers, timeout=15)
+            response.raise_for_status()
+
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            # Find transcript links
+            transcript_links = []
+            for link in soup.find_all('a', href=True):
+                href = link.get('href', '')
+                text = link.get_text(strip=True)
+
+                # Look for transcript links
+                if '/news/transcripts/' in href or 'transcript' in text.lower():
+                    if self.config.ticker.lower() in href.lower() or self.config.ticker.lower() in text.lower():
+                        full_url = href if href.startswith('http') else f"https://www.investing.com{href}"
+
+                        # Extract date from link or title
+                        date_match = re.search(r'(\d{4})', text)
+                        year = int(date_match.group(1)) if date_match else None
+
+                        # Check if within timeframe
+                        if year and datetime(year, 1, 1) >= cutoff_date:
+                            transcript_links.append((full_url, text, year))
+                        elif not year:
+                            transcript_links.append((full_url, text, None))
+
+            # Also try direct transcripts page
+            direct_url = f"https://www.investing.com/equities/{self.config.ticker.lower()}-earnings"
+            try:
+                time.sleep(2)
+                response = requests.get(direct_url, headers=headers, timeout=15)
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    for link in soup.find_all('a', href=True):
+                        href = link.get('href', '')
+                        if '/news/transcripts/' in href:
+                            full_url = href if href.startswith('http') else f"https://www.investing.com{href}"
+                            text = link.get_text(strip=True)
+                            transcript_links.append((full_url, text, None))
+            except:
+                pass
+
+            # Download transcripts
+            seen_urls = set()
+            for i, (url, title, year) in enumerate(transcript_links[:15]):  # Limit to 15
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+
+                try:
+                    time.sleep(3)  # Polite scraping - 3 seconds between requests
+                    response = requests.get(url, headers=headers, timeout=15)
+                    response.raise_for_status()
+
+                    soup = BeautifulSoup(response.text, 'html.parser')
+
+                    # Find the article content
+                    article = soup.find('article') or soup.find('div', class_='article')
+                    if not article:
+                        # Try to find main content div
+                        article = soup.find('div', class_='WYSIWYG') or soup.find('div', class_='articlePage')
+
+                    if article:
+                        # Extract text content
+                        text = article.get_text(separator='\n\n', strip=True)
+
+                        # Extract quarter and year from title or content
+                        quarter_match = re.search(r'Q([1-4])\s*(\d{4})', title + ' ' + text[:500])
+                        if quarter_match:
+                            quarter = int(quarter_match.group(1))
+                            year = int(quarter_match.group(2))
+                        else:
+                            # Try to extract just year and guess quarter
+                            year_match = re.search(r'(\d{4})', title)
+                            if year_match:
+                                year = int(year_match.group(1))
+                                # Guess quarter based on current date or index
+                                quarter = ((i % 4) + 1)
+                            else:
+                                year = datetime.now().year
+                                quarter = i + 1
+
+                        # Check if within timeframe
+                        transcript_date = datetime(year, (quarter * 3), 1)
+                        if transcript_date < cutoff_date:
+                            continue
+
+                        filename = f"{year}_Q{quarter}_{self.config.ticker}_earnings_call_investing.txt"
+                        filepath = self.transcripts_dir / filename
+
+                        # Add header
+                        full_text = f"Source: Investing.com\n"
+                        full_text += f"Title: {title}\n"
+                        full_text += f"URL: {url}\n"
+                        full_text += "=" * 80 + "\n\n"
+                        full_text += text
+
+                        save_text(full_text, filepath)
+
+                        transcript = Transcript(
+                            title=title or f"{self.config.ticker} Q{quarter} {year} Earnings Call",
+                            fiscal_period=f"{year}Q{quarter}",
+                            date=transcript_date,
+                            source='investing.com',
+                            url=url,
+                            local_path=str(filepath),
+                            has_text_extract=True
+                        )
+                        transcripts.append(transcript)
+
+                        if progress_callback:
+                            progress_callback(f"Downloaded {year} Q{quarter} transcript from Investing.com")
+
+                except Exception as e:
+                    logger.warning(f"Error downloading transcript from {url}: {e}")
+                    continue
+
+        except Exception as e:
+            logger.error(f"Error collecting from Investing.com: {e}")
+            if progress_callback:
+                progress_callback(f"Error accessing Investing.com: {str(e)}")
+
+        return transcripts
+
     def _collect_from_finnhub(
         self,
+        cutoff_date: datetime,
         progress_callback: Optional[Callable[[str], None]] = None
     ) -> List[Transcript]:
         """Collect from Finnhub API"""
@@ -107,6 +246,11 @@ class TranscriptsCollector:
                     transcript_id = item.get('id')
                     quarter = item.get('quarter')
                     year = item.get('year')
+
+                    # Check if within timeframe
+                    transcript_date = datetime(year, (quarter * 3), 1)
+                    if transcript_date < cutoff_date:
+                        continue
 
                     # Get full transcript
                     time.sleep(0.5)  # Rate limiting
@@ -151,6 +295,7 @@ class TranscriptsCollector:
 
     def _collect_from_fool(
         self,
+        cutoff_date: datetime,
         progress_callback: Optional[Callable[[str], None]] = None
     ) -> List[Transcript]:
         """Collect from Motley Fool"""
@@ -205,6 +350,11 @@ class TranscriptsCollector:
                         else:
                             year = datetime.now().year
                             quarter = i + 1
+
+                        # Check if within timeframe
+                        transcript_date = datetime(year, (quarter * 3), 1)
+                        if transcript_date < cutoff_date:
+                            continue
 
                         filename = f"{year}_Q{quarter}_{self.config.ticker}_earnings_call_fool.txt"
                         filepath = self.transcripts_dir / filename
