@@ -15,6 +15,7 @@ from ..utils.web_utils import WebCrawler, find_links, same_domain, normalize_url
 from ..utils.text_extraction import extract_text_from_html, clean_text
 from .enhanced_management import EnhancedManagementExtractor
 from .enhanced_segments import EnhancedSegmentsExtractor
+from .comprehensive_crawler import ComprehensiveWebCrawler
 
 logger = logging.getLogger(__name__)
 
@@ -414,6 +415,7 @@ class ExtraLayer:
         # Initialize collectors - using enhanced extractors
         self.segments_extractor = EnhancedSegmentsExtractor(ticker_config, data_dir)
         self.management_extractor = EnhancedManagementExtractor(ticker_config, data_dir)
+        self.comprehensive_crawler = ComprehensiveWebCrawler(ticker_config, data_dir)
 
     def collect(
         self,
@@ -454,5 +456,15 @@ class ExtraLayer:
         else:
             if progress_callback:
                 progress_callback("Management extraction skipped (disabled in settings)")
+
+        # Comprehensive website crawl for all business information
+        if self.config.collect_comprehensive_website and company_website:
+            if progress_callback:
+                progress_callback("Starting comprehensive website crawl for business information...")
+            website_results = self.comprehensive_crawler.crawl_comprehensive(company_website, progress_callback)
+            results['comprehensive_website'] = website_results
+        else:
+            if progress_callback and not self.config.collect_comprehensive_website:
+                progress_callback("Comprehensive website crawl skipped (disabled in settings)")
 
         return results

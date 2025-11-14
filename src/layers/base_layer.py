@@ -260,7 +260,24 @@ class IRPresentationsCollector:
                 progress_callback(f"Found {len(presentation_links)} potential presentations")
 
             # Download presentations
+            cutoff_date = datetime.now() - timedelta(days=365 * self.config.lookback_years)
+
             for i, (url, title, date_str) in enumerate(presentation_links):
+                # Parse date and check if within timeframe
+                parsed_date = None
+                if date_str:
+                    try:
+                        import dateparser
+                        parsed_date = dateparser.parse(date_str)
+                    except:
+                        pass
+
+                # Skip if date is outside our timeframe
+                if parsed_date and parsed_date < cutoff_date:
+                    if progress_callback:
+                        progress_callback(f"Skipping old presentation: {title} ({date_str})")
+                    continue
+
                 if progress_callback:
                     progress_callback(f"Downloading presentation {i+1}/{len(presentation_links)}: {title}")
 

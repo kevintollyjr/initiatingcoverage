@@ -65,6 +65,7 @@ class TickerConfig:
     # Extra Layer - Granular controls
     collect_website_segments: bool = True
     collect_management_profiles: bool = True
+    collect_comprehensive_website: bool = True  # NEW: Crawl entire website for business info
     max_website_pages: int = 100
     website_crawl_depth: int = 2
 

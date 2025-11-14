@@ -281,6 +281,12 @@ def main():
                 st.caption("Website Analysis")
                 collect_website_segments = st.checkbox("Business Segments", value=True, key="segments")
                 collect_management_profiles = st.checkbox("Management Profiles", value=True, key="mgmt")
+                collect_comprehensive_website = st.checkbox(
+                    "Comprehensive Website Crawl",
+                    value=True,
+                    key="comprehensive_web",
+                    help="Deep crawl of entire website for business info (products, tech, strategy, etc.)"
+                )
 
                 st.caption("Crawl Parameters")
                 max_website_pages = st.number_input(
@@ -300,6 +306,7 @@ def main():
                 )
         else:
             collect_website_segments = collect_management_profiles = False
+            collect_comprehensive_website = False
             max_website_pages = 100
             website_crawl_depth = 2
 
@@ -386,6 +393,7 @@ def main():
             # Extra layer granular settings
             collect_website_segments=collect_website_segments,
             collect_management_profiles=collect_management_profiles,
+            collect_comprehensive_website=collect_comprehensive_website,
             max_website_pages=max_website_pages,
             website_crawl_depth=website_crawl_depth,
             # API keys
