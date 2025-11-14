@@ -592,8 +592,9 @@ class TranscriptsCollector:
         progress_callback: Optional[Callable[[str], None]] = None
     ) -> List[Transcript]:
         """
-        Collect from Motley Fool - Full transcripts available
-        URL pattern: /earnings/call-transcripts/YYYY/MM/DD/company-ticker-qX-yyyy-earnings-call-transcript/
+        Collect transcripts using Google search - accepts ANY source
+        Searches: "{TICKER} Q{quarter} {year} earnings call transcript"
+        Accepts: fool.com, seekingalpha.com, investing.com, yahoo.com, etc.
         """
         transcripts = []
 
@@ -643,31 +644,32 @@ class TranscriptsCollector:
                         if response.status_code == 200:
                             soup = BeautifulSoup(response.text, 'html.parser')
 
-                            # Look for fool.com transcript URLs in results
+                            # Look for ANY transcript URL in Google results (fool.com, seekingalpha, investing.com, etc.)
                             for link in soup.find_all('a', href=True):
                                 href = link.get('href', '')
 
-                                # Google wraps URLs like: /url?q=https://www.fool.com/...&sa=...
-                                if '/url?q=' in href and 'fool.com/earnings/call-transcripts' in href:
+                                # Google wraps URLs like: /url?q=https://...&sa=...
+                                if '/url?q=' in href:
                                     # Extract actual URL from Google wrapper
                                     url_match = re.search(r'/url\?q=([^&]+)', href)
                                     if url_match:
                                         full_url = urllib.parse.unquote(url_match.group(1))
 
-                                        # Verify this is for our ticker and quarter
-                                        if self.config.ticker.lower() in full_url.lower():
-                                            # Extract date from URL for verification
-                                            date_match = re.search(r'/(\d{4})/(\d{2})/(\d{2})/', full_url)
-                                            if date_match:
-                                                url_year = int(date_match.group(1))
-                                                month = int(date_match.group(2))
+                                        # Check if this looks like a transcript URL (any source)
+                                        url_lower = full_url.lower()
+                                        if (('transcript' in url_lower or 'earnings' in url_lower) and
+                                            self.config.ticker.lower() in url_lower and
+                                            # Accept multiple sources
+                                            ('fool.com' in url_lower or 'seekingalpha.com' in url_lower or
+                                             'investing.com' in url_lower or 'yahoo.com' in url_lower or
+                                             'finance' in url_lower)):
 
-                                                # Add to list (first match for this quarter)
-                                                text = link.get_text(strip=True)
-                                                transcript_links.append((full_url, text, year, quarter, month))
-                                                if progress_callback:
-                                                    progress_callback(f"Found Q{quarter} {year}: {text[:50]}...")
-                                                break  # Found transcript for this quarter, move to next
+                                            # Add to list (first match for this quarter)
+                                            text = link.get_text(strip=True)
+                                            transcript_links.append((full_url, text, year, quarter, 1))  # month=1 as placeholder
+                                            if progress_callback:
+                                                progress_callback(f"Found Q{quarter} {year}: {full_url[:80]}...")
+                                            break  # Found transcript for this quarter, move to next
 
                     except Exception as e:
                         logger.warning(f"Error searching for Q{quarter} {year}: {e}")
@@ -698,7 +700,7 @@ class TranscriptsCollector:
 
                     soup = BeautifulSoup(response.text, 'html.parser')
 
-                    # Try multiple selectors to find transcript content
+                    # Try multiple selectors to find transcript content (works for multiple sites)
                     content = None
                     selectors = [
                         ('article', {}),
@@ -706,20 +708,26 @@ class TranscriptsCollector:
                         ('div', {'class': 'article-content'}),
                         ('div', {'class': 'tailwind-article-body'}),
                         ('div', {'itemprop': 'articleBody'}),
+                        ('div', {'class': 'sa-art article-width'}),  # Seeking Alpha
+                        ('div', {'class': 'WYSIWYG'}),  # Investing.com
+                        ('div', {'id': 'article-body'}),  # Various sites
+                        ('div', {'class': 'caas-body'}),  # Yahoo Finance
                         ('main', {}),
+                        ('body', {}),  # Last resort - take everything
                     ]
 
                     for tag, attrs in selectors:
                         content = soup.find(tag, attrs)
                         if content:
                             if progress_callback:
-                                progress_callback(f"Found content with {tag} selector")
+                                progress_callback(f"Extracting content (using {tag} selector)")
                             break
 
                     if not content:
                         if progress_callback:
-                            progress_callback(f"⚠️ Could not find transcript content")
-                        continue
+                            progress_callback(f"⚠️ Could not find transcript content, trying full page")
+                        # Last resort - take all text from page
+                        content = soup
 
                     # Extract all text from content
                     # Get text with paragraph breaks
@@ -748,11 +756,23 @@ class TranscriptsCollector:
                     if transcript_date < cutoff_date:
                         continue
 
-                    filename = f"{year}_Q{quarter}_{self.config.ticker}_earnings_call_fool.txt"
+                    # Determine source from URL
+                    if 'fool.com' in url.lower():
+                        source = 'fool.com'
+                    elif 'seekingalpha.com' in url.lower():
+                        source = 'seekingalpha.com'
+                    elif 'investing.com' in url.lower():
+                        source = 'investing.com'
+                    elif 'yahoo.com' in url.lower():
+                        source = 'yahoo.com'
+                    else:
+                        source = 'web'
+
+                    filename = f"{year}_Q{quarter}_{self.config.ticker}_earnings_call_{source.replace('.', '_')}.txt"
                     filepath = self.transcripts_dir / filename
 
                     # Format transcript
-                    full_text = f"Source: The Motley Fool\n"
+                    full_text = f"Source: {source}\n"
                     full_text += f"Title: {title}\n"
                     full_text += f"URL: {url}\n"
                     full_text += f"Date: Q{quarter} {year}\n"
@@ -765,7 +785,7 @@ class TranscriptsCollector:
                         title=title or f"{self.config.ticker} Q{quarter} {year} Earnings Call",
                         fiscal_period=f"{year}Q{quarter}",
                         date=transcript_date,
-                        source='fool.com',
+                        source=source,
                         url=url,
                         local_path=str(filepath),
                         has_text_extract=True
