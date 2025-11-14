@@ -606,53 +606,62 @@ class TranscriptsCollector:
                 'Accept-Encoding': 'gzip, deflate, br',
                 'Connection': 'keep-alive',
                 'Upgrade-Insecure-Requests': '1',
-                'Referer': 'https://www.fool.com/'
+                'Referer': 'https://www.google.com/'
             }
 
-            # Strategy 1: Try direct search on Fool.com for this ticker
+            # NOTE: Fool.com search is broken (returns 404), use Google site: search instead
             if progress_callback:
-                progress_callback(f"Searching Fool.com for {self.config.ticker} transcripts...")
+                progress_callback(f"Searching for {self.config.ticker} transcripts (via Google)...")
 
-            search_url = f"https://www.fool.com/search/?q={self.config.ticker}+earnings+call+transcript"
+            # Use Google to search fool.com
+            import urllib.parse
+            search_query = f"{self.config.ticker} earnings call transcript site:fool.com"
+            search_url = f"https://www.google.com/search?q={urllib.parse.quote(search_query)}"
 
             try:
                 response = requests.get(search_url, headers=headers, timeout=15)
                 if progress_callback:
-                    progress_callback(f"HTTP {response.status_code} - Search results")
+                    progress_callback(f"HTTP {response.status_code} - Google search")
 
                 if response.status_code == 200:
                     soup = BeautifulSoup(response.text, 'html.parser')
 
-                    # Find all transcript links
+                    # Find all transcript links in Google results
                     transcript_links = []
                     for link in soup.find_all('a', href=True):
                         href = link.get('href', '')
-                        text = link.get_text(strip=True)
 
-                        # Look for earnings call transcript URLs
-                        if 'earnings/call-transcripts' in href and self.config.ticker.lower() in href.lower():
-                            full_url = href if href.startswith('http') else f"https://www.fool.com{href}"
+                        # Google wraps URLs like: /url?q=https://www.fool.com/...&sa=...
+                        if '/url?q=' in href and 'fool.com/earnings/call-transcripts' in href:
+                            # Extract actual URL from Google wrapper
+                            url_match = re.search(r'/url\?q=([^&]+)', href)
+                            if url_match:
+                                full_url = urllib.parse.unquote(url_match.group(1))
 
-                            # Extract date from URL: /YYYY/MM/DD/
-                            date_match = re.search(r'/(\d{4})/(\d{2})/(\d{2})/', href)
-                            if date_match:
-                                year = int(date_match.group(1))
-                                month = int(date_match.group(2))
-                                day = int(date_match.group(3))
+                                # Verify ticker is in URL
+                                if self.config.ticker.lower() in full_url.lower():
+                                    # Extract date from URL: /YYYY/MM/DD/
+                                    date_match = re.search(r'/(\d{4})/(\d{2})/(\d{2})/', full_url)
+                                    if date_match:
+                                        year = int(date_match.group(1))
+                                        month = int(date_match.group(2))
+                                        day = int(date_match.group(3))
 
-                                # Check if within timeframe
-                                try:
-                                    url_date = datetime(year, month, day)
-                                    if url_date >= cutoff_date:
-                                        transcript_links.append((full_url, text, year, month))
-                                        if progress_callback:
-                                            progress_callback(f"Found: {text[:60] if text else href[-60:]}...")
-                                except:
-                                    pass
+                                        # Check if within timeframe
+                                        try:
+                                            url_date = datetime(year, month, day)
+                                            if url_date >= cutoff_date:
+                                                text = link.get_text(strip=True)
+                                                transcript_links.append((full_url, text, year, month))
+                                                if progress_callback:
+                                                    progress_callback(f"Found: {text[:60] if text else full_url[-60:]}...")
+                                        except:
+                                            pass
 
                     if not transcript_links:
                         if progress_callback:
-                            progress_callback(f"⚠️ No transcript links found in search results")
+                            progress_callback(f"⚠️ No transcript links found for {self.config.ticker}")
+                            progress_callback(f"💡 Tip: Transcripts may not be available for this ticker")
                     else:
                         if progress_callback:
                             progress_callback(f"Found {len(transcript_links)} potential transcripts")
