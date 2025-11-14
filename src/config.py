@@ -74,8 +74,9 @@ class TickerConfig:
 
     # API keys (from Streamlit secrets or environment)
     alpha_vantage_key: Optional[str] = None
-    fmp_key: Optional[str] = None  # FinancialModelingPrep
+    fmp_key: Optional[str] = None  # FinancialModelingPrep (for transcripts, financials)
     finnhub_key: Optional[str] = None  # Finnhub (for earnings call transcripts)
+    api_ninjas_key: Optional[str] = None  # API Ninjas (for S&P 100 transcripts - free tier)
 
     # Contact info for SEC (required)
     sec_user_agent: Optional[str] = None
@@ -88,6 +89,8 @@ class TickerConfig:
             self.fmp_key = os.getenv("FMP_KEY")
         if not self.finnhub_key:
             self.finnhub_key = os.getenv("FINNHUB_KEY")
+        if not self.api_ninjas_key:
+            self.api_ninjas_key = os.getenv("API_NINJAS_KEY")
         if not self.sec_user_agent:
             self.sec_user_agent = os.getenv("SEC_USER_AGENT", "Research App contact@example.com")
 

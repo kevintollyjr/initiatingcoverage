@@ -1,6 +1,10 @@
 """
 Earnings Call Transcripts Collector
-Supports multiple sources: Finnhub API, Fool.com scraping
+Supports multiple sources:
+- API Ninjas (free for S&P 100 companies)
+- Financial Modeling Prep API (free tier)
+- Finnhub API (free tier)
+- Fool.com scraping (fallback)
 """
 from pathlib import Path
 from typing import List, Optional, Callable
@@ -27,6 +31,8 @@ class TranscriptsCollector:
         self.transcripts_dir = ensure_dir(data_dir / "ir" / "transcripts")
 
         # API keys
+        self.api_ninjas_key = ticker_config.api_ninjas_key
+        self.fmp_key = ticker_config.fmp_key
         self.finnhub_key = ticker_config.finnhub_key
 
     def collect(
@@ -49,27 +55,28 @@ class TranscriptsCollector:
             progress_callback(f"Collecting earnings call transcripts for {self.config.ticker}...")
             progress_callback(f"Looking back {self.config.lookback_years} years (since {cutoff_date.strftime('%Y-%m-%d')})")
 
-        # Try Investing.com first (best free source)
-        if progress_callback:
-            progress_callback("Trying Investing.com...")
-        investing_transcripts = self._collect_from_investing(cutoff_date, progress_callback)
-        transcripts.extend(investing_transcripts)
+        # Try API Ninjas first (free for S&P 100 companies, covers 8,000+ companies on premium)
+        if self.api_ninjas_key:
+            if progress_callback:
+                progress_callback("Trying API Ninjas (free for S&P 100)...")
+            api_ninjas_transcripts = self._collect_from_api_ninjas(cutoff_date, progress_callback)
+            transcripts.extend(api_ninjas_transcripts)
+
+        # Try Financial Modeling Prep API if we don't have enough
+        if len(transcripts) < 5 and self.fmp_key:
+            if progress_callback:
+                progress_callback("Trying Financial Modeling Prep API...")
+            fmp_transcripts = self._collect_from_fmp(cutoff_date, progress_callback)
+            transcripts.extend(fmp_transcripts)
 
         # Try Finnhub API if available and we don't have enough
-        if len(transcripts) < 5 and self.finnhub_key:
+        if len(transcripts) < 8 and self.finnhub_key:
             if progress_callback:
                 progress_callback("Trying Finnhub API...")
             finnhub_transcripts = self._collect_from_finnhub(cutoff_date, progress_callback)
             transcripts.extend(finnhub_transcripts)
 
-        # Try Seeking Alpha as additional source
-        if len(transcripts) < 8:
-            if progress_callback:
-                progress_callback("Trying Seeking Alpha...")
-            sa_transcripts = self._collect_from_seeking_alpha(cutoff_date, progress_callback)
-            transcripts.extend(sa_transcripts)
-
-        # Try Fool.com as additional source
+        # Try Fool.com scraping as last resort
         if len(transcripts) < 10:
             if progress_callback:
                 progress_callback("Trying Fool.com...")
@@ -85,6 +92,190 @@ class TranscriptsCollector:
             if progress_callback:
                 progress_callback("⚠️ No transcripts found. They may be behind paywalls or not publicly available.")
                 progress_callback("💡 You can manually add transcripts to: " + str(self.transcripts_dir))
+
+        return transcripts
+
+    def _collect_from_api_ninjas(
+        self,
+        cutoff_date: datetime,
+        progress_callback: Optional[Callable[[str], None]] = None
+    ) -> List[Transcript]:
+        """
+        Collect from API Ninjas
+        Free tier: S&P 100 companies only
+        Premium: 8,000+ companies globally
+        """
+        transcripts = []
+
+        try:
+            url = "https://api.api-ninjas.com/v1/earningstranscript"
+            headers = {'X-Api-Key': self.api_ninjas_key}
+            params = {'ticker': self.config.ticker}
+
+            if progress_callback:
+                progress_callback(f"Requesting latest transcript for {self.config.ticker}...")
+
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+
+            if response.status_code == 200:
+                data = response.json()
+
+                # API Ninjas returns latest transcript by default
+                if data and isinstance(data, dict):
+                    # Extract transcript information
+                    transcript_text = data.get('transcript', '')
+                    year = data.get('year')
+                    quarter = data.get('quarter')
+
+                    if transcript_text and year and quarter:
+                        # Check if within timeframe
+                        transcript_date = datetime(int(year), int(quarter) * 3, 1)
+                        if transcript_date >= cutoff_date:
+                            filename = f"{year}_Q{quarter}_{self.config.ticker}_earnings_call_apininjas.txt"
+                            filepath = self.transcripts_dir / filename
+
+                            # Format transcript
+                            full_text = f"Source: API Ninjas\n"
+                            full_text += f"Company: {self.config.ticker}\n"
+                            full_text += f"Date: Q{quarter} {year}\n"
+                            full_text += "=" * 80 + "\n\n"
+                            full_text += transcript_text
+
+                            save_text(full_text, filepath)
+
+                            transcript = Transcript(
+                                title=f"{self.config.ticker} Q{quarter} {year} Earnings Call",
+                                fiscal_period=f"{year}Q{quarter}",
+                                date=transcript_date,
+                                source='api_ninjas',
+                                url=f"https://api-ninjas.com/earningstranscript/{self.config.ticker}",
+                                local_path=str(filepath),
+                                has_text_extract=True
+                            )
+                            transcripts.append(transcript)
+
+                            if progress_callback:
+                                progress_callback(f"✓ Downloaded Q{quarter} {year} transcript from API Ninjas")
+                        else:
+                            if progress_callback:
+                                progress_callback(f"⚠️ Latest transcript (Q{quarter} {year}) is outside lookback period")
+                    else:
+                        if progress_callback:
+                            progress_callback(f"⚠️ Incomplete transcript data from API Ninjas")
+                else:
+                    if progress_callback:
+                        progress_callback(f"⚠️ No transcript data returned from API Ninjas")
+
+            elif response.status_code == 402:
+                if progress_callback:
+                    progress_callback(f"⚠️ HTTP 402 - {self.config.ticker} not in free S&P 100 tier (requires premium)")
+            elif response.status_code == 404:
+                if progress_callback:
+                    progress_callback(f"⚠️ HTTP 404 - No transcripts found for {self.config.ticker}")
+            else:
+                if progress_callback:
+                    progress_callback(f"⚠️ HTTP {response.status_code} - API Ninjas request failed")
+                logger.warning(f"API Ninjas returned {response.status_code}: {response.text[:200]}")
+
+        except Exception as e:
+            logger.error(f"Error collecting from API Ninjas: {e}")
+            if progress_callback:
+                progress_callback(f"❌ Error with API Ninjas: {str(e)[:50]}")
+
+        return transcripts
+
+    def _collect_from_fmp(
+        self,
+        cutoff_date: datetime,
+        progress_callback: Optional[Callable[[str], None]] = None
+    ) -> List[Transcript]:
+        """
+        Collect from Financial Modeling Prep API
+        Requires year and quarter parameters
+        """
+        transcripts = []
+
+        try:
+            # Calculate quarters to fetch based on lookback period
+            current_year = datetime.now().year
+            current_quarter = (datetime.now().month - 1) // 3 + 1
+            start_year = cutoff_date.year
+
+            if progress_callback:
+                progress_callback(f"Fetching transcripts from {start_year} to {current_year}...")
+
+            # Iterate through years and quarters
+            for year in range(start_year, current_year + 1):
+                for quarter in range(1, 5):
+                    # Skip future quarters
+                    if year == current_year and quarter > current_quarter:
+                        continue
+
+                    # Check if this quarter is within lookback period
+                    quarter_date = datetime(year, quarter * 3, 1)
+                    if quarter_date < cutoff_date:
+                        continue
+
+                    try:
+                        url = f"https://financialmodelingprep.com/api/v3/earning_call_transcript/{self.config.ticker}"
+                        params = {
+                            'year': year,
+                            'quarter': quarter,
+                            'apikey': self.fmp_key
+                        }
+
+                        time.sleep(0.3)  # Rate limiting
+                        response = requests.get(url, params=params, timeout=15)
+
+                        if response.status_code == 200:
+                            data = response.json()
+
+                            # FMP returns list with single transcript or empty list
+                            if data and isinstance(data, list) and len(data) > 0:
+                                transcript_data = data[0]
+                                transcript_text = transcript_data.get('content', '')
+
+                                if transcript_text and len(transcript_text) > 500:
+                                    filename = f"{year}_Q{quarter}_{self.config.ticker}_earnings_call_fmp.txt"
+                                    filepath = self.transcripts_dir / filename
+
+                                    # Format transcript
+                                    full_text = f"Source: Financial Modeling Prep\n"
+                                    full_text += f"Company: {self.config.ticker}\n"
+                                    full_text += f"Date: Q{quarter} {year}\n"
+                                    full_text += "=" * 80 + "\n\n"
+                                    full_text += transcript_text
+
+                                    save_text(full_text, filepath)
+
+                                    transcript = Transcript(
+                                        title=f"{self.config.ticker} Q{quarter} {year} Earnings Call",
+                                        fiscal_period=f"{year}Q{quarter}",
+                                        date=quarter_date,
+                                        source='fmp',
+                                        url=url,
+                                        local_path=str(filepath),
+                                        has_text_extract=True
+                                    )
+                                    transcripts.append(transcript)
+
+                                    if progress_callback:
+                                        progress_callback(f"✓ Downloaded Q{quarter} {year} transcript from FMP")
+
+                    except Exception as e:
+                        logger.warning(f"Error fetching FMP transcript for Q{quarter} {year}: {e}")
+                        continue
+
+            if progress_callback:
+                if transcripts:
+                    progress_callback(f"✓ Collected {len(transcripts)} transcripts from FMP")
+                else:
+                    progress_callback(f"⚠️ No transcripts found on FMP (may require paid plan or not available)")
+
+        except Exception as e:
+            logger.error(f"Error collecting from FMP: {e}")
+            if progress_callback:
+                progress_callback(f"❌ Error with FMP: {str(e)[:50]}")
 
         return transcripts
 

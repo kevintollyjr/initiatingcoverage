@@ -338,13 +338,19 @@ def main():
         fmp_key = st.text_input(
             "FMP API Key",
             type="password",
-            help="FinancialModelingPrep key (optional)"
+            help="FinancialModelingPrep key (for transcripts & financials)"
         )
 
         finnhub_key = st.text_input(
             "Finnhub API Key",
             type="password",
             help="Free key from finnhub.io (for earnings call transcripts)"
+        )
+
+        api_ninjas_key = st.text_input(
+            "API Ninjas Key",
+            type="password",
+            help="Free key from api-ninjas.com (free tier covers S&P 100 transcripts)"
         )
 
         # SEC user agent (required)
@@ -420,6 +426,7 @@ def main():
             alpha_vantage_key=alpha_vantage_key if alpha_vantage_key else None,
             fmp_key=fmp_key if fmp_key else None,
             finnhub_key=finnhub_key if finnhub_key else None,
+            api_ninjas_key=api_ninjas_key if api_ninjas_key else None,
             sec_user_agent=sec_user_agent
         )
 
