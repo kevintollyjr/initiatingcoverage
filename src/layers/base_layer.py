@@ -20,6 +20,15 @@ from ..utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
+# PDF conversion support
+try:
+    from weasyprint import HTML as WeasyHTML
+    from weasyprint.text.fonts import FontConfiguration
+    WEASYPRINT_AVAILABLE = True
+except ImportError:
+    WEASYPRINT_AVAILABLE = False
+    logger.warning("weasyprint not available - PDF conversion will be skipped")
+
 
 class SECFilingsCollector:
     """Collect SEC filings using sec-edgar-downloader"""
@@ -168,12 +177,38 @@ class SECFilingsCollector:
                         save_text(text_content, text_path)
                         filing.has_text_extract = True
 
-                # Copy primary doc to our organized structure
-                organized_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}{primary_doc.suffix}"
-                if not organized_path.exists():
-                    import shutil
-                    shutil.copy2(primary_doc, organized_path)
-                filing.local_path = str(organized_path)
+                # Handle file format based on user preference
+                format_pref = self.config.sec_filing_format
+                final_paths = []
+
+                # Copy/convert based on format preference
+                if format_pref in ["html", "both"]:
+                    # Keep original HTML/TXT
+                    organized_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}{primary_doc.suffix}"
+                    if not organized_path.exists():
+                        import shutil
+                        shutil.copy2(primary_doc, organized_path)
+                    final_paths.append(organized_path)
+
+                if format_pref in ["pdf", "both"]:
+                    # Convert to PDF
+                    pdf_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}.pdf"
+                    if not pdf_path.exists():
+                        if self._convert_to_pdf(primary_doc, pdf_path):
+                            final_paths.append(pdf_path)
+                        else:
+                            # Fallback to original if PDF conversion fails
+                            logger.warning(f"PDF conversion failed for {primary_doc}, keeping original")
+                            organized_path = form_dir / f"{filing_date.strftime('%Y-%m-%d')}_{accession}_{form_type.replace(' ', '_')}{primary_doc.suffix}"
+                            if not organized_path.exists():
+                                import shutil
+                                shutil.copy2(primary_doc, organized_path)
+                            final_paths.append(organized_path)
+                    else:
+                        final_paths.append(pdf_path)
+
+                # Use the primary path (PDF if available, otherwise original)
+                filing.local_path = str(final_paths[0]) if final_paths else str(primary_doc)
 
                 filings.append(filing)
 
@@ -193,6 +228,65 @@ class SECFilingsCollector:
 
         # Fallback: use file modification time
         return datetime.fromtimestamp(primary_doc.stat().st_mtime)
+
+    def _convert_to_pdf(self, source_file: Path, output_pdf: Path) -> bool:
+        """
+        Convert HTML or TXT file to PDF
+
+        Args:
+            source_file: Path to HTML or TXT file
+            output_pdf: Path where PDF should be saved
+
+        Returns:
+            True if conversion succeeded, False otherwise
+        """
+        if not WEASYPRINT_AVAILABLE:
+            logger.warning("weasyprint not installed - cannot convert to PDF")
+            return False
+
+        try:
+            # Read source content
+            with open(source_file, 'r', encoding='utf-8', errors='ignore') as f:
+                content = f.read()
+
+            # Determine if HTML or plain text
+            is_html = source_file.suffix.lower() in ['.html', '.htm']
+
+            if not is_html:
+                # Wrap plain text in basic HTML for better PDF rendering
+                content = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <style>
+                        body {{
+                            font-family: 'Courier New', monospace;
+                            font-size: 10pt;
+                            margin: 1in;
+                            line-height: 1.4;
+                            white-space: pre-wrap;
+                            word-wrap: break-word;
+                        }}
+                    </style>
+                </head>
+                <body>
+                {content}
+                </body>
+                </html>
+                """
+
+            # Convert to PDF
+            font_config = FontConfiguration()
+            html = WeasyHTML(string=content, base_url=str(source_file.parent))
+            html.write_pdf(output_pdf, font_config=font_config)
+
+            logger.info(f"Successfully converted {source_file.name} to PDF")
+            return True
+
+        except Exception as e:
+            logger.error(f"Error converting {source_file} to PDF: {e}")
+            return False
 
     def _save_filings_index(self, filings: List[SECFiling]):
         """Save filings index to JSON"""
