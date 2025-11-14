@@ -1,0 +1,18 @@
+# Additional requirements for local development
+# Install with: pip install -r requirements.txt -r requirements-local.txt
+
+# PDF Conversion (requires system libraries - see packages.txt)
+weasyprint>=60.0
+
+# Note: Before installing weasyprint, you must install system dependencies:
+#
+# Ubuntu/Debian:
+#   sudo apt-get install libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0
+#
+# macOS:
+#   brew install pango gdk-pixbuf libffi
+#
+# Windows:
+#   See https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#windows
+#
+# If you skip this, the app will still work - SEC filings will be saved as HTML/TXT

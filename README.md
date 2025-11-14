@@ -66,6 +66,26 @@ venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### 4. Optional: PDF Conversion (Local Only)
+
+By default, SEC filings are saved as HTML/TXT files. For PDF conversion:
+
+**Linux/Ubuntu:**
+```bash
+sudo apt-get install libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0
+pip install -r requirements-local.txt
+```
+
+**macOS:**
+```bash
+brew install pango gdk-pixbuf libffi
+pip install -r requirements-local.txt
+```
+
+**Windows:** See [WeasyPrint installation guide](https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#windows)
+
+**Note:** PDF conversion is not available on Streamlit Cloud due to missing system libraries. The app works perfectly fine without it - filings are simply saved in their original HTML/TXT format which is actually better for text extraction and analysis.
+
 ## ⚙️ Configuration
 
 ### Required Configuration

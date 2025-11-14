@@ -20,14 +20,23 @@ from ..utils.rate_limiter import RateLimiter
 
 logger = logging.getLogger(__name__)
 
-# PDF conversion support
+# PDF conversion support (optional - requires system libraries)
 try:
     from weasyprint import HTML as WeasyHTML
     from weasyprint.text.fonts import FontConfiguration
     WEASYPRINT_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError) as e:
     WEASYPRINT_AVAILABLE = False
-    logger.warning("weasyprint not available - PDF conversion will be skipped")
+    # OSError occurs when system libraries (libpango, libcairo) are missing
+    # This is expected on Streamlit Cloud and other restricted environments
+    if isinstance(e, OSError):
+        logger.info(
+            "WeasyPrint system libraries not available - PDF conversion disabled. "
+            "SEC filings will be saved in their original HTML/TXT format. "
+            "For local PDF conversion, see: https://doc.courtbouillon.org/weasyprint/stable/first_steps.html#installation"
+        )
+    else:
+        logger.info("weasyprint package not installed - PDF conversion disabled")
 
 
 class SECFilingsCollector:

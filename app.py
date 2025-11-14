@@ -236,6 +236,14 @@ def main():
                     help="HTML is faster, PDF is more readable, Both downloads everything"
                 )
 
+                # Check if PDF conversion is available
+                try:
+                    from src.layers.base_layer import WEASYPRINT_AVAILABLE
+                    if not WEASYPRINT_AVAILABLE and sec_filing_format in ["pdf", "both"]:
+                        st.info("ℹ️ PDF conversion unavailable (missing system libraries). Files will be saved as HTML/TXT.")
+                except ImportError:
+                    pass
+
                 st.caption("Investor Relations")
                 collect_ir_presentations = st.checkbox("IR Presentations", value=True, key="ir_pres")
                 collect_transcripts = st.checkbox("Earnings Transcripts", value=True, key="transcripts")

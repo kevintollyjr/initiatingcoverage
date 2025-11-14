@@ -1,0 +1,20 @@
+# System packages for optional features
+# These are required for WeasyPrint PDF conversion
+#
+# NOTE: WeasyPrint is OPTIONAL - the app works fine without it!
+# SEC filings will be saved as HTML/TXT instead of PDF.
+#
+# For Streamlit Cloud: These packages may not be available
+# For local Linux/Ubuntu: Install with: sudo apt-get install <package>
+# For macOS: Install with: brew install <package>
+# For Windows: See https://doc.courtbouillon.org/weasyprint/stable/first_steps.html
+
+# Required for WeasyPrint on Linux:
+libpango-1.0-0
+libpangocairo-1.0-0
+libgdk-pixbuf2.0-0
+libffi-dev
+shared-mime-info
+
+# Note: The app will automatically detect if these are missing
+# and disable PDF conversion gracefully.
