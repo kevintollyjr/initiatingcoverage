@@ -19,6 +19,19 @@ This application helps analysts quickly gather and organize relevant company inf
 - **Website Intelligence**: Business segments, products, and management profiles (configurable crawl depth and page limits)
 - **ZIP Download**: One-click export of all collected data
 - **Compliance First**: Respects robots.txt, rate limits, and site terms of service
+- **🤖 AI Report Generation**: Automated initiating coverage reports using local LLMs (new!)
+- **💬 Interactive Chat Q&A**: Ask questions about collected documents with RAG-powered responses (new!)
+
+### New AI Features
+
+This application now includes powerful local AI capabilities powered by Ollama:
+
+- **Automated Report Generation**: Generate comprehensive initiating coverage reports with executive summary, business analysis, financials, investment thesis, and risks
+- **Interactive Document Q&A**: Chat interface to ask questions about any collected document with source citations
+- **100% Local & Private**: All AI processing runs on your machine - no data sent to external APIs
+- **Multiple Model Support**: Choose from various open-source LLMs (Llama, Mistral, Phi-3, etc.)
+
+For detailed AI feature documentation, see [LLM_FEATURES.md](LLM_FEATURES.md)
 
 ## 📋 Prerequisites
 

@@ -464,7 +464,9 @@ def main():
             "📊 IR Decks & Transcripts",
             "📈 Market Data",
             "📰 News",
-            "🌐 Website & Management"
+            "🌐 Website & Management",
+            "🤖 AI Report",
+            "💬 Chat Q&A"
         ])
 
         # Tab 1: SEC Filings
@@ -654,6 +656,225 @@ def main():
                         st.info("No management profiles found")
                 else:
                     st.info("No management index found")
+
+        # Tab 6: AI Report Generation
+        with tabs[5]:
+            st.subheader("🤖 AI-Generated Initiating Coverage Report")
+
+            # Check if Ollama is available
+            try:
+                from src.llm import (
+                    check_ollama_installation,
+                    get_available_models,
+                    ReportGenerator
+                )
+
+                ollama_available, ollama_status = check_ollama_installation()
+
+                if not ollama_available:
+                    st.warning("⚠️ Ollama not available")
+                    st.info(ollama_status)
+                    st.markdown("""
+                    **To use AI features:**
+                    1. Install Ollama: [https://ollama.ai](https://ollama.ai)
+                    2. Install Python package: `pip install ollama`
+                    3. Download a model: `ollama pull llama3.1:8b`
+                    4. Restart the app
+                    """)
+                else:
+                    st.success(f"✓ {ollama_status}")
+
+                    # Model selection
+                    available_models = get_available_models()
+                    if available_models:
+                        selected_model = st.selectbox(
+                            "Select Model",
+                            options=available_models,
+                            help="Choose the LLM model for report generation"
+                        )
+
+                        # Generate report button
+                        if st.button("📝 Generate Report", type="primary"):
+                            ticker_dir = APP_CONFIG.data_dir / ticker_upper
+
+                            # Initialize report generator
+                            generator = ReportGenerator(
+                                data_dir=ticker_dir,
+                                ticker=ticker_upper,
+                                model_name=selected_model
+                            )
+
+                            if generator.available:
+                                # Index documents first
+                                with st.spinner("Indexing documents..."):
+                                    num_chunks = generator.rag.index_all_documents(
+                                        progress_callback=lambda msg: st.info(msg)
+                                    )
+
+                                # Generate report
+                                with st.spinner("Generating report (this may take several minutes)..."):
+                                    report = generator.generate_initiating_coverage_report(
+                                        progress_callback=lambda msg: st.info(msg)
+                                    )
+
+                                if report:
+                                    # Save report
+                                    report_path = generator.save_report(report)
+
+                                    # Display report
+                                    st.success(f"✓ Report generated! ({num_chunks} document chunks indexed)")
+                                    st.markdown(report)
+
+                                    # Download button
+                                    st.download_button(
+                                        "📥 Download Report",
+                                        data=report,
+                                        file_name=f"{ticker_upper}_initiating_coverage.md",
+                                        mime="text/markdown"
+                                    )
+                                else:
+                                    st.error("Failed to generate report")
+                            else:
+                                st.error("Report generator not available. Check dependencies.")
+
+                        # Show existing report if available
+                        existing_report = ticker_dir / f"{ticker_upper}_initiating_coverage_report.md"
+                        if existing_report.exists():
+                            st.divider()
+                            st.subheader("📄 Previously Generated Report")
+                            with open(existing_report, 'r') as f:
+                                existing_content = f.read()
+                            with st.expander("View Report", expanded=False):
+                                st.markdown(existing_content)
+                    else:
+                        st.warning("No models available. Download a model first:")
+                        st.code("ollama pull llama3.1:8b", language="bash")
+
+            except ImportError as e:
+                st.error("LLM dependencies not installed")
+                st.info("Install with: `pip install ollama chromadb sentence-transformers langchain`")
+
+        # Tab 7: Chat Q&A
+        with tabs[6]:
+            st.subheader("💬 Chat with Your Documents")
+
+            try:
+                from src.llm import (
+                    check_ollama_installation,
+                    get_available_models,
+                    ChatInterface
+                )
+
+                ollama_available, ollama_status = check_ollama_installation()
+
+                if not ollama_available:
+                    st.warning("⚠️ Ollama not available")
+                    st.info(ollama_status)
+                    st.markdown("""
+                    **To use chat features:**
+                    1. Install Ollama: [https://ollama.ai](https://ollama.ai)
+                    2. Install Python package: `pip install ollama`
+                    3. Download a model: `ollama pull llama3.1:8b`
+                    4. Restart the app
+                    """)
+                else:
+                    st.success(f"✓ {ollama_status}")
+
+                    # Model selection
+                    available_models = get_available_models()
+                    if available_models:
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            selected_model = st.selectbox(
+                                "Model",
+                                options=available_models,
+                                help="Choose the LLM model for chat",
+                                key="chat_model"
+                            )
+                        with col2:
+                            if st.button("🔄 Clear History"):
+                                if 'chat_interface' in st.session_state:
+                                    st.session_state.chat_interface.clear_history()
+                                    st.success("History cleared!")
+
+                        # Initialize chat interface
+                        ticker_dir = APP_CONFIG.data_dir / ticker_upper
+
+                        if 'chat_interface' not in st.session_state:
+                            chat = ChatInterface(
+                                data_dir=ticker_dir,
+                                ticker=ticker_upper,
+                                model_name=selected_model
+                            )
+
+                            if chat.available:
+                                # Index documents
+                                with st.spinner("Indexing documents for chat..."):
+                                    chat.rag.index_all_documents()
+                                st.session_state.chat_interface = chat
+                                st.session_state.chat_messages = []
+                            else:
+                                st.error("Chat system not available")
+
+                        # Chat interface
+                        if 'chat_interface' in st.session_state:
+                            chat = st.session_state.chat_interface
+
+                            # Display chat history
+                            for msg in st.session_state.get('chat_messages', []):
+                                with st.chat_message(msg['role']):
+                                    st.write(msg['content'])
+                                    if msg.get('sources'):
+                                        with st.expander("📚 Sources"):
+                                            for source in msg['sources'][:3]:
+                                                st.caption(f"**{source['metadata'].get('source', 'unknown')}**")
+                                                st.text(source['text'][:200] + "...")
+
+                            # Chat input
+                            if prompt := st.chat_input("Ask a question about the company..."):
+                                # Add user message
+                                st.session_state.chat_messages.append({
+                                    'role': 'user',
+                                    'content': prompt
+                                })
+
+                                with st.chat_message("user"):
+                                    st.write(prompt)
+
+                                # Get response
+                                with st.chat_message("assistant"):
+                                    with st.spinner("Thinking..."):
+                                        answer, sources = chat.ask(prompt)
+
+                                    st.write(answer)
+
+                                    if sources:
+                                        with st.expander("📚 Sources"):
+                                            for source in sources[:3]:
+                                                st.caption(f"**{source['metadata'].get('source', 'unknown')}**")
+                                                st.text(source['text'][:200] + "...")
+
+                                # Add assistant message
+                                st.session_state.chat_messages.append({
+                                    'role': 'assistant',
+                                    'content': answer,
+                                    'sources': sources
+                                })
+
+                            # Export conversation
+                            if len(st.session_state.get('chat_messages', [])) > 0:
+                                if st.button("📥 Export Conversation"):
+                                    export_path = ticker_dir / f"{ticker_upper}_chat_conversation.md"
+                                    chat.export_conversation(export_path)
+                                    st.success(f"Conversation exported to {export_path}")
+
+                    else:
+                        st.warning("No models available. Download a model first:")
+                        st.code("ollama pull llama3.1:8b", language="bash")
+
+            except ImportError:
+                st.error("LLM dependencies not installed")
+                st.info("Install with: `pip install ollama chromadb sentence-transformers langchain`")
 
 
 if __name__ == "__main__":

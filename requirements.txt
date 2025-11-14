@@ -36,3 +36,9 @@ dateparser>=1.1.8
 # Visualization
 plotly>=5.17.0
 matplotlib>=3.7.0
+
+# LLM & RAG (optional - for report generation and chat)
+ollama>=0.1.0
+chromadb>=0.4.0
+sentence-transformers>=2.2.0
+langchain>=0.1.0
