@@ -170,6 +170,18 @@ def main():
     st.title("📊 Deep Fundamental Equity Research")
     st.markdown("Automated data aggregation for initiating coverage reports")
 
+    # Deployment info
+    import os
+    if os.getenv('STREAMLIT_SHARING_MODE') or os.getenv('STREAMLIT_CLOUD'):
+        st.info("""
+        **☁️ Running on Streamlit Cloud**
+        - ✅ All data collection features available
+        - ❌ AI features (report generation, chat) require local deployment
+        - ℹ️ PDF conversion unavailable (SEC filings saved as HTML/TXT)
+
+        To use AI features, [run locally](https://github.com/yourusername/initiatingcoverage#installation) and install Ollama.
+        """)
+
     # Sidebar
     with st.sidebar:
         st.header("⚙️ Configuration")
@@ -240,7 +252,7 @@ def main():
                 try:
                     from src.layers.base_layer import WEASYPRINT_AVAILABLE
                     if not WEASYPRINT_AVAILABLE and sec_filing_format in ["pdf", "both"]:
-                        st.info("ℹ️ PDF conversion unavailable (missing system libraries). Files will be saved as HTML/TXT.")
+                        st.info("ℹ️ PDF conversion not available (expected on Streamlit Cloud). SEC filings will be saved as HTML/TXT, which works great for analysis!")
                 except ImportError:
                     pass
 
@@ -669,6 +681,13 @@ def main():
         with tabs[5]:
             st.subheader("🤖 AI-Generated Initiating Coverage Report")
 
+            # Cloud deployment notice
+            st.info("""
+            **💡 Local Feature Only**
+            AI features require Ollama running on your local machine. They are **not available on Streamlit Cloud**
+            due to resource limitations. To use AI features, run this app locally and install Ollama.
+            """)
+
             # Check if Ollama is available
             try:
                 from src.llm import (
@@ -765,6 +784,13 @@ def main():
         # Tab 7: Chat Q&A
         with tabs[6]:
             st.subheader("💬 Chat with Your Documents")
+
+            # Cloud deployment notice
+            st.info("""
+            **💡 Local Feature Only**
+            AI features require Ollama running on your local machine. They are **not available on Streamlit Cloud**
+            due to resource limitations. To use AI features, run this app locally and install Ollama.
+            """)
 
             try:
                 from src.llm import (

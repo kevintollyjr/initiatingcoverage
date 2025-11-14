@@ -33,6 +33,23 @@ This application now includes powerful local AI capabilities powered by Ollama:
 
 For detailed AI feature documentation, see [LLM_FEATURES.md](LLM_FEATURES.md)
 
+### ☁️ Streamlit Cloud vs 🏠 Local Deployment
+
+**What works on Streamlit Cloud:**
+- ✅ All data collection features (SEC filings, IR materials, market data, news, website crawling)
+- ✅ Enhanced management and segments extraction
+- ✅ Comprehensive website crawler
+- ✅ IR presentations timeframe filtering
+- ✅ All visualization and data export features
+- ⚠️ SEC filings saved as HTML/TXT (PDF conversion requires system libraries)
+
+**Local deployment only:**
+- 🤖 AI report generation (requires Ollama)
+- 💬 Interactive chat Q&A (requires Ollama)
+- 📄 PDF conversion of SEC filings (requires WeasyPrint system libraries)
+
+**Recommendation:** Use Streamlit Cloud for data collection, download the ZIP bundle, then run locally for AI features if needed.
+
 ## 📋 Prerequisites
 
 - Python 3.11 or higher
